@@ -90,7 +90,7 @@ def load_data(image_path):
 image_data = load_data(img_dir)
 
 #imgs = image_data['imgs']  # (N, H, W, 3) torch.float32
-N_IMGS = image_data['N_imgs'] 
+N_IMGS = image_data['N_IMGS'] 
 H = image_data['H']
 W = image_data['W']
 TSteps = image_data["TSteps"]
@@ -292,7 +292,10 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
                     rgb_l1_loss = rgb_l1_loss.mean()
 
                     #ssim
-                    rgb_ssim_loss =  1 - SSIM_loss(rgb_rendered,img_selected)
+                    ssim_syn = rearrange( rgb_rendered.unsqueeze(0), "b h w c -> b c h w") # (1,N_select_rows, N_select_cols, 3) -> (1,3,N_select_rows, N_select_cols)
+                    ssim_tgt = rearrange( img_selected.unsqueeze(0), "b h w c -> b c h w") # (1,N_select_rows, N_select_cols, 3) -> (1,3,N_select_rows, N_select_cols)
+
+                    rgb_ssim_loss =  1 - SSIM_loss(ssim_syn,ssim_tgt)
                     ssim_loss_epoch.append(rgb_ssim_loss.clone().detach())
 
                     #edge_aware_loss
