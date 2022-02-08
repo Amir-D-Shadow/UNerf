@@ -33,8 +33,8 @@ load_model = False
 N_EPOCH = 1000  # set to 1000 to get slightly better results. we use 10K epoch in our paper.
 EVAL_INTERVAL = 50  # render an image to visualise for every this interval.
 
-device = torch.device("cuda:6")
-device_ids = [6,7,8,9]
+device = torch.device("cuda:7")
+device_ids = [7,8,9]
 num_of_device = len(device_ids)
 
 SSIM_loss = SSIM(size_average=True)
@@ -170,8 +170,8 @@ class RayParameters():
 
     def __init__(self):
 
-      self.Win_H = 32 * num_of_device
-      self.Win_W = 32
+      self.Win_H = 64 * num_of_device
+      self.Win_W = 64
       self.NEAR, self.FAR = 0.0, 1.0  # ndc near far
       self.N_SAMPLE = 64  # samples per ray 128
       self.POS_ENC_FREQ = 10  # positional encoding freq for location
