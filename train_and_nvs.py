@@ -226,7 +226,7 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
     focal_net.train()
     pose_param_net.train()
 
-    t_vals = torch.linspace(ray_params.NEAR, ray_params.FAR, ray_params.N_SAMPLE, device='cuda')  # (N_sample,) sample position 
+    t_vals = torch.linspace(ray_params.NEAR, ray_params.FAR, ray_params.N_SAMPLE, device=device)  # (N_sample,) sample position 
     ssim_loss_epoch = []
     psnr_loss_epoch = []
     total_loss_epoch = []
@@ -239,7 +239,7 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
     num_rows = H // ray_params.Win_H
     num_cols = W // ray_params.Win_W
 
-    for t in range(t_list):
+    for t in t_list:
 
         #get imgs
         IMGS = image_data[t]  # (N,H,W,3)
@@ -249,13 +249,6 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
         np.random.shuffle(ids)
 
         for i in ids:
-
-            fxfy = focal_net()
-
-            # KEY 1: compute ray directions using estimated intrinsics online.
-            ray_dir_cam = comp_ray_dir_cam_fxfy(H, W, fxfy[0], fxfy[1])
-            img = IMGS[i]  # (H, W, 3)
-            c2w = pose_param_net(i)  # (4, 4)
 
             #render image by patch
             for row_i in range(num_rows):
@@ -268,6 +261,13 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
                     #set up
                     col_start = col_j * ray_params.Win_W
                     col_end = (col_j + 1) * ray_params.Win_W
+
+                    fxfy = focal_net()
+
+                    # KEY 1: compute ray directions using estimated intrinsics online.
+                    ray_dir_cam = comp_ray_dir_cam_fxfy(H, W, fxfy[0], fxfy[1])
+                    img = IMGS[i]  # (H, W, 3)
+                    c2w = pose_param_net(i)  # (4, 4)
 
                     # crop 32x32 pixel on an image and their rays for training.
                     IMGS_input = rearrange( IMGS[:,row_start:row_end,col_start:col_end,:] , "b h w c -> b c h w") # (N,H,W,3) -> (N,3,H,W)
