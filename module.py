@@ -90,6 +90,81 @@ class DWConvNeX(nn.Module):
 
         return out
 
+class TinyEncoder(nn.Module):
+
+    def __init__(self,in_dim):
+
+        """
+        params in_dim : pos_enc channel dim
+        """
+        super(TinyEncoder,self).__init__()
+
+        self.embedding_layer = nn.Sequential(DWConv(in_dim=in_dim,out_dim=32,kernel_size=7,stride=1,padding=3),
+                                            DWConvNeX(in_dim=32,kernel_size=7,stride=1,padding=3)
+                                            )
+
+        self.down1 = nn.Sequential(DWConv(in_dim=32,out_dim=32,kernel_size=5,stride=1,padding=2),
+                                   nn.LeakyReLU(),
+                                   DWConv(in_dim=32,out_dim=32,kernel_size=5,stride=1,padding=2),
+                                   nn.LeakyReLU(),
+                                   nn.Conv2d(in_channels=32,out_channels=64,kernel_size=1,stride=1),
+                                   nn.AvgPool2d(kernel_size=2)
+                                   )
+
+        self.down2 = nn.Sequential(DWConv(in_dim=64,out_dim=64,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   DWConv(in_dim=64,out_dim=64,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   nn.Conv2d(in_channels=64,out_channels=128,kernel_size=1,stride=1),
+                                   nn.AvgPool2d(kernel_size=2)
+                                   )
+
+        self.down3 = nn.Sequential(DWConv(in_dim=128,out_dim=128,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   DWConv(in_dim=128,out_dim=128,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   nn.Conv2d(in_channels=128,out_channels=256,kernel_size=1,stride=1),
+                                   nn.AvgPool2d(kernel_size=2)
+                                   )
+
+        self.down4 = nn.Sequential(DWConv(in_dim=256,out_dim=256,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   DWConv(in_dim=256,out_dim=256,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   nn.Conv2d(in_channels=256,out_channels=512,kernel_size=1,stride=1),
+                                   nn.AvgPool2d(kernel_size=2)
+                                   )
+
+        self.down5 = nn.Sequential(DWConv(in_dim=512,out_dim=512,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   DWConv(in_dim=512,out_dim=512,kernel_size=3,stride=1,padding=1),
+                                   nn.LeakyReLU(),
+                                   nn.Conv2d(in_channels=512,out_channels=512,kernel_size=1,stride=1),
+                                   nn.AvgPool2d(kernel_size=2)
+                                   )
+
+
+    def forward(self,x):
+
+        """
+        params x: (N,C,H,W) 
+        """
+
+        y = self.embedding_layer(x) #(1,32,H,W)
+
+        yout1 = self.down1(y) #(1,32,H,W) e.g.(1,32,384,512)
+
+        yout2 = self.down2(yout1) #(1,128,H/4,W/4)  e.g.(1,128,96,128)
+
+        yout3 = self.down3(yout2) #(1,256,H/8,W/8)  e.g.(1,256,48,64)
+
+        yout4 = self.down4(yout3) #(1,512,H/16,W/16)  e.g.(1,512,24,32)
+
+        yout5 = self.down5(yout4) #(1,512,H/32,W/32)  e.g.(1,512,12,16)
+
+        return yout1,yout2,yout3,yout4,yout5
+
+        
 
 class Encoder(nn.Module):
 
@@ -163,62 +238,62 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
 
-    def __init__(self,tpos_in_dim,dir_in_dim):
+    def __init__(self,tpos_dec_in_dim,dir_in_dim):
+
+        """
+        param tpos_in_dim : channel dim of encoded tpos 
+        param dir_in_dim : channel dim of direction input
+        """
 
         super(Decoder,self).__init__()
 
-        self.up1 = nn.Sequential(DWConv(in_dim=512+tpos_in_dim,out_dim=512+tpos_in_dim,kernel_size=3,stride=1,padding=1),
-                                nn.Conv2d(in_channels=512+tpos_in_dim,out_channels=512,kernel_size=1,stride=1),
+        self.up1 = nn.Sequential(nn.Conv2d(in_channels=512+tpos_dec_in_dim,out_channels=(512+tpos_dec_in_dim)*4,kernel_size=1,stride=1),
                                 nn.LeakyReLU(),
-                                Rearrange("(f1 b) c h w -> b (f1 c) h w",f1=4),
                                 nn.PixelShuffle(upscale_factor=2),
+                                nn.Conv2d(in_channels=512+tpos_dec_in_dim,out_channels=512,kernel_size=1,stride=1),
                                 DWConvNeX(in_dim=512,kernel_size=3,stride=1,padding=1),
                                 DWConvNeX(in_dim=512,kernel_size=3,stride=1,padding=1),
-                                DWConv(in_dim=512,out_dim=512,kernel_size=3,stride=1,padding=1),
+                                nn.Conv2d(in_channels=512,out_channels=512,kernel_size=1,stride=1),
                                 nn.LeakyReLU()
                                 )
 
-        self.up2 = nn.Sequential(DWConv(in_dim=512+512,out_dim=512+512,kernel_size=3,stride=1,padding=1),
-                                nn.Conv2d(in_channels=512+512,out_channels=512,kernel_size=1,stride=1),
+        self.up2 = nn.Sequential(nn.Conv2d(in_channels=512+512+512,out_channels=512+512+512+512,kernel_size=1,stride=1),
                                 nn.LeakyReLU(),
-                                Rearrange("(f1 b) c h w -> b (f1 c) h w",f1=4),
                                 nn.PixelShuffle(upscale_factor=2),
+                                nn.Conv2d(in_channels=512,out_channels=512,kernel_size=1,stride=1),
                                 DWConvNeX(in_dim=512,kernel_size=3,stride=1,padding=1),
                                 DWConvNeX(in_dim=512,kernel_size=3,stride=1,padding=1),
-                                DWConv(in_dim=512,out_dim=256,kernel_size=3,stride=1,padding=1),
+                                nn.Conv2d(in_channels=512,out_channels=256,kernel_size=1,stride=1),
                                 nn.LeakyReLU()
                                 )
 
-        self.up3 = nn.Sequential(DWConv(in_dim=256+256,out_dim=256+256,kernel_size=3,stride=1,padding=1),
-                                nn.Conv2d(in_channels=256+256,out_channels=256,kernel_size=1,stride=1),
+        self.up3 = nn.Sequential(nn.Conv2d(in_channels=256+256+256,out_channels=256+256+256+256,kernel_size=1,stride=1),
                                 nn.LeakyReLU(),
-                                Rearrange("(f1 b) c h w -> b (f1 c) h w",f1=4),
                                 nn.PixelShuffle(upscale_factor=2),
+                                nn.Conv2d(in_channels=256,out_channels=256,kernel_size=1,stride=1),
                                 DWConvNeX(in_dim=256,kernel_size=3,stride=1,padding=1),
                                 DWConvNeX(in_dim=256,kernel_size=3,stride=1,padding=1),
-                                DWConv(in_dim=256,out_dim=128,kernel_size=3,stride=1,padding=1),
+                                nn.Conv2d(in_channels=256,out_channels=128,kernel_size=1,stride=1),
                                 nn.LeakyReLU()
                                 )
 
-        self.up4 = nn.Sequential(DWConv(in_dim=128+128,out_dim=128+128,kernel_size=3,stride=1,padding=1),
-                                nn.Conv2d(in_channels=128+128,out_channels=128,kernel_size=1,stride=1),
+        self.up4 = nn.Sequential(nn.Conv2d(in_channels=128+128+128,out_channels=128+128+128+128,kernel_size=1,stride=1),
                                 nn.LeakyReLU(),
-                                Rearrange("(f1 b) c h w -> b (f1 c) h w",f1=4),
                                 nn.PixelShuffle(upscale_factor=2),
+                                nn.Conv2d(in_channels=128,out_channels=128,kernel_size=1,stride=1),
                                 DWConvNeX(in_dim=128,kernel_size=3,stride=1,padding=1),
                                 DWConvNeX(in_dim=128,kernel_size=3,stride=1,padding=1),
-                                DWConv(in_dim=128,out_dim=64,kernel_size=3,stride=1,padding=1),
+                                nn.Conv2d(in_channels=128,out_channels=64,kernel_size=1,stride=1),
                                 nn.LeakyReLU()
                                 )
 
-        self.up5 = nn.Sequential(DWConv(in_dim=64+64,out_dim=64+64,kernel_size=3,stride=1,padding=1),
-                                nn.Conv2d(in_channels=64+64,out_channels=64,kernel_size=1,stride=1),
+        self.up5 = nn.Sequential(nn.Conv2d(in_channels=64+64+64,out_channels=64+64+64+64,kernel_size=1,stride=1),
                                 nn.LeakyReLU(),
-                                Rearrange("(f1 b) c h w -> b (f1 c) h w",f1=4),
                                 nn.PixelShuffle(upscale_factor=2),
+                                nn.Conv2d(in_channels=64,out_channels=64,kernel_size=1,stride=1),
                                 DWConvNeX(in_dim=64,kernel_size=3,stride=1,padding=1),
                                 DWConvNeX(in_dim=64,kernel_size=3,stride=1,padding=1),
-                                DWConv(in_dim=64,out_dim=32,kernel_size=3,stride=1,padding=1),
+                                nn.Conv2d(in_channels=64,out_channels=32,kernel_size=1,stride=1),
                                 nn.LeakyReLU()
                                 )
 
@@ -242,36 +317,32 @@ class Decoder(nn.Module):
     def forward(self,enc_out,tpos_enc,dir_enc):
 
         """
-        params enc_out : list [dout1,dout2,dout3,dout4,dout5]
-        params tpos_enc: (num_of_patch,C,H,W) e.g.(1024,63,12,16)
+        params enc_out : list [dout1,dout2,dout3,dout4,dout5] , dout : #(N,C,H,W)  e.g.(1,512,12,16)
+        params tpos_enc: list [xout1,xout2,xout3,xout4,xout5] , xout : #(N,C,H,W)  e.g.(1,512,12,16)
         params dir_enc: (1,27,H,W) e.g. (1,27,384,512)
         """
 
         dout1,dout2,dout3,dout4,dout5 = enc_out
+        xout1,xout2,xout3,xout4,xout5 = tpos_enc
 
         #up1
-        y1 = dout5.expand(1024,-1,-1,-1) #(1024,512,H/32,W/32) e.g.(1024,512,12,16)
-        y1 = torch.cat([tpos_enc,y1],dim=1) #(1024,512+tpos_in_dim,H/32,W/32) e.g.(1024,512+tpos_in_dim,12,16)
-        y1 = self.up1(y1) #(256,512,H/16,W/16) e.g.(256,512,24,32)
+        y1 = torch.cat([dout5,xout5],dim=1) #(N,2*C,H,W)
+        y1 = self.up1(y1) #(1,512,H/16,W/16) e.g.(1,512,24,32)
 
         #up2
-        y2 = dout4.expand(256,-1,-1,-1)  #(256,512,H/16,W/16)  e.g.(256,512,24,32)
-        y2 = torch.cat([y1,y2],dim=1)  #(256,512+512,H/16,W/16)  e.g.(256,512+512,24,32)
-        y2 = self.up2(y2) #(64,256,H/8,W/8)  e.g.(64,256,48,64)
+        y2 = torch.cat([y1,dout4,xout4],dim=1)  #(N,3*C,H,W)  e.g.(1,512+512+512,24,32)
+        y2 = self.up2(y2) #(1,256,H/8,W/8)  e.g.(1,256,48,64)
 
         #up3
-        y3 = dout3.expand(64,-1,-1,-1) #(64,256,H/8,W/8)  e.g.(64,256,48,64)
-        y3 = torch.cat([y2,y3],dim=1) #(64,512,H/8,W/8)  e.g.(64,512,48,64)
-        y3 = self.up3(y3) #(16,128,H/4,W/4)  e.g.(16,128,96,128)
+        y3 = torch.cat([y2,dout3,xout3],dim=1) #(N,3*C,H,W)  e.g.(1,256+256+256,48,64)
+        y3 = self.up3(y3) #(1,128,H/4,W/4)  e.g.(1,128,96,128)
 
         #up4
-        y4 = dout2.expand(16,-1,-1,-1) #(16,128,H/4,W/4)  e.g.(16,128,96,128)
-        y4 = torch.cat([y3,y4],dim=1) #(16,256,H/4,W/4)  e.g.(16,256,96,128)
-        y4 = self.up4(y4) #(4,64,H/2,W/2)  e.g.(4,64,192,256)
+        y4 = torch.cat([y3,dout2,xout2],dim=1) #(N,3*C,H,W)  e.g.(1,128+128+128,96,128)
+        y4 = self.up4(y4) #(1,64,H/2,W/2)  e.g.(1,64,192,256)
 
         #up5
-        y5 = dout1.expand(4,-1,-1,-1) #(4,64,H/2,W/2)  e.g.(4,64,192,256)
-        y5 = torch.cat([y4,y5],dim=1) #(4,128,H/2,W/2)  e.g.(4,128,192,256)
+        y5 = torch.cat([y4,dout1,xout1],dim=1) #(N,3*C,H,W)  e.g.(1,64+64+64,192,256)
         y5 = self.up5(y5) #(1,32,H,W)  e.g.(1,32,384,512)
 
 
@@ -297,8 +368,9 @@ class UNerf(nn.Module):
 
         super(UNerf,self).__init__()
 
+        self.pos_enc_block = TinyEncoder(in_dim=tpos_in_dim)
         self.enc_block = Encoder(in_dim=enc_in_dim)
-        self.dec_block = Decoder(tpos_in_dim=tpos_in_dim,dir_in_dim=dir_in_dim)
+        self.dec_block = Decoder(tpos_dec_in_dim=512,dir_in_dim=dir_in_dim)
 
     def forward(self,img_data,tpos_enc,dir_enc):
 
@@ -313,26 +385,25 @@ class UNerf(nn.Module):
         enc_out = [dout1,dout2,dout3,dout4,dout5]
 
         #decode
-        H,W,N_sam,C = tpos_enc.shape[0],tpos_enc.shape[1],tpos_enc.shape[2],tpos_enc.shape[3]
-
-        kh,kw = H//32 , W//32
-
-        tpos_enc_x = tpos_enc.unfold(0,kh,kh).unfold(1,kw,kw).contiguous() #(32,32, N_sample, 84,kh,kw)
-        tpos_enc_x = rearrange(tpos_enc_x,"hn wn m c h w -> (hn wn) m c h w") #(1024, N_sample, 84,kh,kw)
+        _,_,N_sam,_ = tpos_enc.shape[0],tpos_enc.shape[1],tpos_enc.shape[2],tpos_enc.shape[3]
 
         yout = []
 
         for n in range(N_sam):
             
             #space time
-            tpos_enc_x_in = tpos_enc_x[:,n,:,:,:] #(1024,c,kh,kw)
+            tpos_enc_x_in = tpos_enc[:,:,n,:] #(H, W, c)
+            tpos_enc_x_in = rearrange(tpos_enc_x_in,"h w c -> c h w") #(c, H, W)
+            tpos_enc_x_in = tpos_enc_x_in.unsqueeze(0) #(1, c, H, W)
+            xout1,xout2,xout3,xout4,xout5 = self.pos_enc_block(tpos_enc_x_in) 
+            tpos_out = [xout1,xout2,xout3,xout4,xout5]
 
             #direction
             dir_enc_x_in = dir_enc[:,:,n,:] #(H, W, c)
             dir_enc_x_in = rearrange(dir_enc_x_in,"h w c -> c h w") #(c, H, W)
             dir_enc_x_in = dir_enc_x_in.unsqueeze(0)  #(1, c, H, W)
 
-            rgb_den = self.dec_block(enc_out,tpos_enc_x_in,dir_enc_x_in) #(H,W,4)  e.g.(384,512,4)
+            rgb_den = self.dec_block(enc_out,tpos_out,dir_enc_x_in) #(H,W,4)  e.g.(384,512,4)
 
             yout.append(rgb_den)
 
@@ -343,15 +414,15 @@ class UNerf(nn.Module):
 
 if __name__ == "__main__":
 
-    """
+ 
     model= UNerf(3*5,63,27)
 
     img_data = torch.randn(5,3,64,64)
-    tpos_enc = torch.randn(64,64,32,63)
-    dir_enc = torch.randn(64,64,32,27)
+    tpos_enc = torch.randn(64,64,64,63)
+    dir_enc = torch.randn(64,64,64,27)
 
     yout = model(img_data,tpos_enc,dir_enc)
-    """
+ 
   
     print("ok")
 

@@ -35,6 +35,7 @@ EVAL_INTERVAL = 50  # render an image to visualise for every this interval.
 
 device = torch.device("cuda:6")
 device_ids = [6,7,8,9]
+num_of_device = len(device_ids)
 
 SSIM_loss = SSIM(size_average=True)
 SSIM_loss = nn.DataParallel(SSIM_loss,device_ids=device_ids)
@@ -49,7 +50,7 @@ def load_imgs(image_dir):
     img_list = []
     for p in img_paths:
         img = imageio.imread(p)[:, :, :3]  # (H, W, 3) np.uint8
-        img = Image.fromarray(img).resize((256,192),Image.BILINEAR) #resize (512,384)
+        img = Image.fromarray(img).resize((512,384),Image.BILINEAR) #resize (512,384)
         img_list.append(img)
     img_list = np.stack(img_list)  # (N, H, W, 3)
     img_list = torch.from_numpy(img_list).float() / 255  # (N, H, W, 3) torch.float32
@@ -169,7 +170,7 @@ class RayParameters():
 
     def __init__(self):
 
-      self.Win_H = 32
+      self.Win_H = 32 * num_of_device
       self.Win_W = 32
       self.NEAR, self.FAR = 0.0, 1.0  # ndc near far
       self.N_SAMPLE = 64  # samples per ray 128
@@ -248,20 +249,24 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
         ids = np.arange(N_IMGS)
         np.random.shuffle(ids)
 
+        #set up row id and col id
+        row_list = [( row_i * ray_params.Win_H , (row_i + 1) * ray_params.Win_H ) for row_i in range(num_rows)]
+        random.shuffle(row_list)
+        col_list = [( col_j * ray_params.Win_W , (col_j + 1) * ray_params.Win_W ) for col_j in range(num_cols)]
+        random.shuffle(col_list)
+
         for i in ids:
 
             #render image by patch
-            for row_i in range(num_rows):
+            for row_id in row_list:
 
-                row_start = row_i * ray_params.Win_H
-                row_end  = (row_i+1) * ray_params.Win_H
+                row_start , row_end = row_id
 
-                for col_j in range(num_cols):
+                for col_id in col_list:
+
+                    col_start , col_end = col_id
 
                     #set up
-                    col_start = col_j * ray_params.Win_W
-                    col_end = (col_j + 1) * ray_params.Win_W
-
                     fxfy = focal_net()
 
                     # KEY 1: compute ray directions using estimated intrinsics online.
