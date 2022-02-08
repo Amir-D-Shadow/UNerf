@@ -414,7 +414,7 @@ class UNerf(nn.Module):
 
 if __name__ == "__main__":
 
- 
+    """
     model= UNerf(3*5,63,27)
 
     img_data = torch.randn(5,3,64,64)
@@ -422,8 +422,7 @@ if __name__ == "__main__":
     dir_enc = torch.randn(64,64,64,27)
 
     yout = model(img_data,tpos_enc,dir_enc)
- 
-  
+    """
     print("ok")
 
             
