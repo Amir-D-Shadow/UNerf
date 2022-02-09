@@ -175,7 +175,7 @@ class Encoder(nn.Module):
         """
         super(Encoder,self).__init__()
 
-        self.reshape_to = Rearrange("b c h w -> (b c) h w")
+        self.reshape_to = Rearrange("h w c -> c h w")
 
         self.embedding_layer = nn.Sequential(DWConv(in_dim=in_dim,out_dim=32,kernel_size=7,stride=1,padding=3),
                                             DWConvNeX(in_dim=32,kernel_size=7,stride=1,padding=3)
@@ -215,7 +215,7 @@ class Encoder(nn.Module):
     def forward(self,x):
 
         """
-        params x: (N,C,H,W) 
+        params x: (H,W,N*C) 
         """
         y = self.reshape_to(x) #(N*C,H,W)
 

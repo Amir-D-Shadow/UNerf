@@ -275,8 +275,8 @@ def train_one_epoch(image_data, H, W, ray_params, opt_nerf, opt_focal,opt_pose, 
                     c2w = pose_param_net(i)  # (4, 4)
 
                     # crop 32x32 pixel on an image and their rays for training.
-                    IMGS_input = rearrange( IMGS[:,row_start:row_end,col_start:col_end,:] , "b h w c -> b c h w") # (N,H,W,3) -> (N,3,H,W)
-                    IMGS_input = IMGS_input.to(device) #(N,3,N_select_rows, N_select_cols)
+                    IMGS_input = rearrange( IMGS[:,row_start:row_end,col_start:col_end,:] , "b h w c -> h w (b c)") # (N,H,W,3) -> (H,W,b*c)
+                    IMGS_input = IMGS_input.to(device) #(N_select_rows, N_select_cols,N*3)
 
                     ray_selected_cam = ray_dir_cam[row_start:row_end,col_start:col_end,:]  # (N_select_rows, N_select_cols, 3)
 
@@ -366,8 +366,8 @@ def render_novel_view(image_data,c2w,t, H, W, fxfy, ray_params, nerf_model):
             col_end = (col_j + 1) * ray_params.Win_W
 
             #crop patch
-            IMGS_input = rearrange( IMGS[:,row_start:row_end,col_start:col_end,:] , "b h w c -> b c h w") # (N,H,W,3) -> (N,3,H,W)
-            IMGS_input = IMGS_input.to(device) #(N,3,N_select_rows, N_select_cols)
+            IMGS_input = rearrange( IMGS[:,row_start:row_end,col_start:col_end,:] , "b h w c -> h w (b c)") # (N,H,W,3) -> (H,W,b*c)
+            IMGS_input = IMGS_input.to(device) #(N_select_rows, N_select_cols,N*3)
 
             ray_selected_cam = ray_dir_cam[row_start:row_end,col_start:col_end,:]  # (N_select_rows, N_select_cols, 3)
 
